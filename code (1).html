@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WNC Off-Road Ventures</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <script src='https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css' rel='stylesheet' />
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r126/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/jscastro76/threebox@v.2.2.2/dist/threebox.min.js" type="text/javascript"></script>
+    <link href="https://cdn.jsdelivr.net/gh/jscastro76/threebox@v.2.2.2/dist/threebox.css" rel="stylesheet">
+
+    <!-- Mapbox Geocoder for address input in directions -->
+    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
+    <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css" type="text/css">
+
+
+    <style>
+        body { 
+            margin: 0; padding: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            line-height: 1.6; background-color: #f4f7f6;
+        }
+        #app-container { display: flex; height: 100vh; }
+        
+        #left-panel {
+            width: 320px; padding: 20px;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            overflow-y: auto; background-color: #ffffff; z-index: 10;
+            display: flex; flex-direction: column;
+        }
+        #left-panel h2, #left-panel h3 {
+            margin-top: 0; margin-bottom: 15px;
+            color: #333; font-weight: 600;
+        }
+        #left-panel h2 { font-size: 1.6em; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        #left-panel h3 { font-size: 1.2em; margin-top:20px; }
+
+        /* Trail List */
+        #trail-list { list-style: none; padding: 0; margin-bottom: 20px; }
+        #trail-list li {
+            padding: 10px 12px; margin-bottom: 8px;
+            background-color: #f9f9f9; border: 1px solid #e0e0e0; 
+            border-radius: 4px; cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            font-size: 0.9em;
+        }
+        #trail-list li:hover { background-color: #e9e9e9; transform: translateY(-1px); }
+
+        /* Directions Section */
+        #directions-form input[type="text"] {
+            width: calc(100% - 22px); padding: 10px; margin-bottom: 10px;
+            border: 1px solid #ccc; border-radius: 4px; font-size: 0.9em;
+        }
+        .direction-buttons button {
+            padding: 8px 12px; margin-right: 5px; background-color: #5cb85c;
+            color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;
+        }
+        .direction-buttons button:hover { background-color: #4cae4c; }
+        #clear-route-button { background-color: #d9534f; }
+        #clear-route-button:hover { background-color: #c9302c; }
+        #get-current-location { background-color: #337ab7; }
+        #get-current-location:hover { background-color: #286090; }
+
+
+        /* "List Your Trail" Button & Form */
+        #show-list-trail-form-button {
+            display: block; width: 100%; padding: 12px; margin-top: 20px;
+            background-color: #007bff; color: white; text-align: center;
+            border: none; border-radius: 5px; cursor: pointer; font-size: 1em; font-weight: 500;
+        }
+        #show-list-trail-form-button:hover { background-color: #0056b3; }
+
+        .form-section { margin-top: auto; border-top: 1px solid #eee; padding-top: 20px;}
+
+
+        #map { flex-grow: 1; height: 100vh; }
+
+        /* Modal Styles (mostly unchanged, minor tweaks) */
+        .modal {
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0;
+            width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6);
+            padding-top: 50px; backdrop-filter: blur(3px);
+        }
+        .modal-content {
+            background-color: #fff; margin: 5% auto; padding: 25px;
+            border-radius: 8px; width: 90%; max-width: 600px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3); position: relative;
+            animation: fadeInModal 0.3s ease-out;
+        }
+        @keyframes fadeInModal { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .modal-content h3, .modal-content h4 { margin-top: 0; color: #333; }
+        .modal-content h3 { font-size: 1.8em; margin-bottom: 20px; }
+        .modal-content h4 { font-size: 1.3em; margin-bottom: 10px; margin-top:15px; border-top: 1px solid #eee; padding-top:15px;}
+        .modal-content p { margin-bottom: 10px; color: #555; }
+        .modal-content strong { color: #333; }
+        .modal-content label { display: block; margin-top: 10px; margin-bottom: 5px; font-weight: 600; font-size: 0.9em;}
+        .modal-content input[type="text"], .modal-content input[type="number"], .modal-content textarea {
+            width: calc(100% - 22px); padding: 10px; margin-bottom: 10px;
+            border: 1px solid #ccc; border-radius: 4px; font-size: 0.95em;
+        }
+        .modal-content textarea { min-height: 60px; }
+        .modal-content button {
+            background-color: #007bff; color: white; padding: 10px 20px;
+            border: none; border-radius: 5px; cursor: pointer; font-size: 1em; margin-top: 15px;
+        }
+        .modal-content button:hover { background-color: #0056b3; }
+        .close-button {
+            color: #888; position: absolute; top: 15px; right: 20px;
+            font-size: 28px; font-weight: bold; line-height: 1;
+        }
+        .close-button:hover, .close-button:focus { color: #333; text-decoration: none; cursor: pointer; }
+        
+        #campsites-list { list-style: disc; padding-left: 20px; }
+        #campsites-list li { margin-bottom: 5px; }
+
+        .mapboxgl-popup { max-width: 200px; font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif; }
+        .mapboxgl-popup-content { text-align: center; }
+
+        /* Style for the geocoder input for start address */
+        #start-address-geocoder { margin-bottom: 10px; }
+        #start-address-geocoder .mapboxgl-ctrl-geocoder { min-width: 100%; box-shadow: none; border: 1px solid #ccc; }
+        #start-address-geocoder .mapboxgl-ctrl-geocoder input[type="text"] { height: 38px; }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <div id="left-panel">
+            <h2>WNC Off-Road Ventures</h2>
+            
+            <div id="directions-section">
+                <h3>Get Directions</h3>
+                <div id="start-address-geocoder">
+                    <!-- Mapbox Geocoder for start address will be injected here -->
+                </div>
+                 <div class="direction-buttons">
+                    <button id="get-current-location" title="Use my current location">My Location</button>
+                    <button id="get-route-button">Get Route</button>
+                    <button id="clear-route-button">Clear Route</button>
+                </div>
+            </div>
+
+            <h3>Available Trails</h3>
+            <ul id="trail-list"></ul>
+            
+            <div class="form-section">
+                <button id="show-list-trail-form-button">List Your Trail (Simulated)</button>
+            </div>
+        </div>
+        <div id="map"></div>
+    </div>
+
+    <!-- Trail Information Modal -->
+    <div id="trail-info-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeModal('trail-info-modal')">&times;</span>
+            <h3 id="modal-trail-name">Trail Name</h3>
+            <p><strong>Price:</strong> $<span id="modal-trail-price"></span> / day (simulated)</p>
+            <p><strong>Difficulty:</strong> <span id="modal-trail-difficulty"></span></p>
+            <p><strong>Length:</strong> <span id="modal-trail-length"></span></p>
+            <p><strong>Terrain:</strong> <span id="modal-trail-terrain"></span></p>
+            <p><strong>Description:</strong> <span id="modal-trail-description"></span></p>
+            
+            <div id="modal-campsites-section">
+                <h4>Available Campsites:</h4>
+                <ul id="campsites-list">
+                    <!-- Campsite items will be populated here -->
+                </ul>
+            </div>
+            <button id="book-trail-button">Book This Trail (Simulated)</button>
+        </div>
+    </div>
+
+    <!-- "List Your Trail" Form Modal -->
+    <div id="list-trail-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeModal('list-trail-modal')">&times;</span>
+            <h3>List Your Off-Road Trail</h3>
+            <label for="new-trail-name">Trail Name:</label>
+            <input type="text" id="new-trail-name" required>
+            
+            <label for="new-trail-lat">Latitude (e.g., 35.687):</label>
+            <input type="number" step="any" id="new-trail-lat" required>
+            
+            <label for="new-trail-lng">Longitude (e.g., -82.985):</label>
+            <input type="number" step="any" id="new-trail-lng" required>
+
+            <label for="new-trail-price">Price per Day (USD):</label>
+            <input type="number" id="new-trail-price" value="20" required>
+
+            <label for="new-trail-difficulty">Difficulty (e.g., Easy, Moderate, Hard):</label>
+            <input type="text" id="new-trail-difficulty" value="Moderate">
+            
+            <label for="new-trail-length">Length (e.g., 5 miles):</label>
+            <input type="text" id="new-trail-length" value="~5 miles">
+            
+            <label for="new-trail-terrain">Terrain Type (e.g., Rocky, Muddy):</label>
+            <input type="text" id="new-trail-terrain" value="Mixed">
+            
+            <label for="new-trail-description">Description:</label>
+            <textarea id="new-trail-description">A great trail for off-roading fun!</textarea>
+
+            <h4>Add Campsites (Optional)</h4>
+            <div id="new-campsites-container">
+                <!-- Campsite input fields will be added here -->
+            </div>
+            <button type="button" id="add-campsite-field-button" style="background-color: #6c757d; margin-top: 5px; margin-bottom:15px;">Add Campsite Location</button>
+            
+            <button id="submit-new-trail-button">Submit New Trail</button>
+        </div>
+    </div>
+
+    <!-- Booking Confirmation Modal -->
+    <div id="confirmation-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeModal('confirmation-modal')">&times;</span>
+            <h3>Booking Confirmation</h3>
+            <p id="confirmation-message">Trail booked successfully (simulation)!</p>
+        </div>
+    </div>
+
+    <script>
+        // IMPORTANT: Replace with your Mapbox Access Token
+        mapboxgl.accessToken = 'pk.eyJ1IjoibmV3b25pbmphIiwiYSI6ImNtYjdiM2IxYjAycDQyaW84bGRncnlraXEifQ.mXX01lBYK4-Di9ur13M9Kw'; // Replace with your token
+
+        // --- Global Variables ---
+        let map;
+        let tb; // Threebox instance
+        let currentSelectedTrail = null;
+        let userStartCoordinates = null; // For directions
+        let trailObjects3D = {}; // Store 3D objects for trails
+        let campsiteObjects3D = {}; // Store 3D objects for campsites
+
+        // --- Sample Trail Data (enhanced) ---
+        const initialTrails = [
+            {
+                id: 'brown-mountain',
+                name: 'Brown Mountain OHV Trail',
+                coordinates: [-81.6907, 35.9088], altitude: 0,
+                price: 25,
+                difficulty: 'Moderate - Hard', length: '~34 miles', terrain: 'Rocky, Steep, Clay',
+                description: 'Popular system. Permit required. Check NCDA&CS.',
+                campsites: [
+                    { id: 'bm-camp1', name: 'Campsite Alpha', coordinates: [-81.6950, 35.9100], altitude: 0 },
+                    { id: 'bm-camp2', name: 'Campsite Beta', coordinates: [-81.6850, 35.9050], altitude: 0 }
+                ]
+            },
+            {
+                id: 'hurricane-creek',
+                name: 'Hurricane Creek Trail',
+                coordinates: [-82.985, 35.687], altitude: 0,
+                price: 15,
+                difficulty: 'Moderate - Hard', length: '~5-7 miles', terrain: 'Rocky, Water Crossings',
+                description: 'Scenic, creek crossings. Near Max Patch. County road.',
+                campsites: [
+                    { id: 'hc-camp1', name: 'Creek View Camp', coordinates: [-82.980, 35.690], altitude: 0 }
+                ]
+            },
+            {
+                id: 'wayehutta',
+                name: 'Wayehutta OHV Trail System',
+                coordinates: [-83.135, 35.345], altitude: 0,
+                price: 30,
+                difficulty: 'Easy - Hardest', length: '~28 miles', terrain: 'Varied, Forested',
+                description: 'Nantahala NF. Range of trails. Permit required. Check USFS.',
+                campsites: []
+            }
+        ];
+        let trails = [...initialTrails]; // Use a mutable copy
+
+        // --- DOM Elements ---
+        const trailListUl = document.getElementById('trail-list');
+        const trailInfoModal = document.getElementById('trail-info-modal');
+        const listTrailModal = document.getElementById('list-trail-modal');
+        const confirmationModal = document.getElementById('confirmation-modal');
+        const bookTrailButton = document.getElementById('book-trail-button');
+        const getCurrentLocationButton = document.getElementById('get-current-location');
+        const getRouteButton = document.getElementById('get-route-button');
+        const clearRouteButton = document.getElementById('clear-route-button');
+        const showListTrailFormButton = document.getElementById('show-list-trail-form-button');
+        const submitNewTrailButton = document.getElementById('submit-new-trail-button');
+        const addCampsiteFieldButton = document.getElementById('add-campsite-field-button');
+        const newCampsitesContainer = document.getElementById('new-campsites-container');
+
+
+        // --- Modal Management ---
+        function openModal(modalId) { document.getElementById(modalId).style.display = 'block'; }
+        function closeModal(modalId) { document.getElementById(modalId).style.display = 'none'; }
+        window.onclick = (event) => {
+            if (event.target.classList.contains('modal')) closeModal(event.target.id);
+        };
+
+        // --- Initialize Map ---
+        map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/satellite-streets-v12',
+            center: [-82.7, 35.6], zoom: 8.5, pitch: 60, bearing: -17.6, antialias: true
+        });
+
+        // Initialize Mapbox Geocoder for start address
+        const startAddressGeocoder = new MapboxGeocoder({
+            accessToken: mapboxgl.accessToken,
+            mapboxgl: mapboxgl,
+            placeholder: "Enter start address or place",
+            marker: false // We'll handle the marker for start point if needed
+        });
+        document.getElementById('start-address-geocoder').appendChild(startAddressGeocoder.onAdd(map));
+
+        startAddressGeocoder.on('result', (e) => {
+            userStartCoordinates = e.result.geometry.coordinates;
+        });
+
+
+        // --- Map Event: Style Loaded (for 3D terrain and Threebox) ---
+        map.on('style.load', () => {
+            map.addSource('mapbox-dem', {
+                'type': 'raster-dem', 'url': 'mapbox://mapbox.mapbox-terrain-dem-v1',
+                'tileSize': 512, 'maxzoom': 14
+            });
+            map.setTerrain({'source': 'mapbox-dem', 'exaggeration': 1.5});
+
+            map.addLayer({
+                id: 'custom_threebox_layer', type: 'custom', renderingMode: '3d',
+                onAdd: function (mapInstance, gl) {
+                    tb = new Threebox(mapInstance, gl, { defaultLights: true, enablePicking: true });
+                    trails.forEach(trail => addTrailToMap(trail)); // Add initial trails
+                },
+                render: function (gl, matrix) { if (tb) tb.update(); }
+            });
+
+            // Handle clicks on 3D objects (trails/campsites)
+            map.on('ObjectClicked', (e) => {
+                let objectData = e.detail.Object3D?.userData || e.detail.mesh?.userData;
+                if (objectData) {
+                    if (objectData.type === 'trail') {
+                        displayTrailInfo(objectData.data);
+                        map.flyTo({ center: objectData.data.coordinates, zoom: 14, pitch: 65 });
+                    } else if (objectData.type === 'campsite') {
+                        // Could show a simple popup for campsite or select it
+                        new mapboxgl.Popup()
+                            .setLngLat(objectData.data.coordinates)
+                            .setHTML(`<b>${objectData.data.name}</b><br>Campsite`)
+                            .addTo(map);
+                         map.flyTo({ center: objectData.data.coordinates, zoom: 16, pitch: 65 });
+                    }
+                }
+            });
+             map.on('ObjectMouseOver', () => map.getCanvas().style.cursor = 'pointer');
+             map.on('ObjectMouseOut', () => map.getCanvas().style.cursor = '');
+        });
+        
+        // --- Trail & Campsite Management ---
+
+        function addTrailToMap(trail) {
+            // Trail Marker
+            const trailMarkerMesh = new THREE.Mesh(
+                new THREE.CylinderGeometry(40, 40, 300, 16),
+                new THREE.MeshPhongMaterial({ color: 0xff8800, emissive:0x111100, shininess: 30 })
+            );
+            trailMarkerMesh.userData = { type: 'trail', data: trail }; // Store trail data
+            
+            const trailObject = tb.Object3D({ obj: trailMarkerMesh, units: 'meters', anchor: 'bottom' })
+                .setCoords([...trail.coordinates, trail.altitude]);
+            trailObject.userData = { type: 'trail', data: trail }; // Also on threebox wrapper
+            trailObject.addTooltip(`<b>${trail.name}</b><br>Click for details`, true);
+            tb.add(trailObject);
+            trailObjects3D[trail.id] = trailObject;
+
+            // Campsite Markers (if any)
+            if (trail.campsites && trail.campsites.length > 0) {
+                trail.campsites.forEach(campsite => addCampsiteToMap(campsite, trail.id));
+            }
+        }
+        
+        function addCampsiteToMap(campsite, parentTrailId) {
+            const campsiteMaterial = new THREE.MeshPhongMaterial({ color: 0x22aa22, emissive: 0x001100, shininess: 20 }); // Green for campsites
+            const campsiteGeometry = new THREE.BoxGeometry(50, 50, 50); // Smaller cube for campsites
+            const campsiteMesh = new THREE.Mesh(campsiteGeometry, campsiteMaterial);
+            campsiteMesh.userData = { type: 'campsite', data: campsite, parentTrailId: parentTrailId };
+
+            const campsiteObject = tb.Object3D({ obj: campsiteMesh, units: 'meters', anchor: 'bottom' })
+                .setCoords([...campsite.coordinates, campsite.altitude]);
+            campsiteObject.userData = { type: 'campsite', data: campsite, parentTrailId: parentTrailId };
+            campsiteObject.addTooltip(`<b>${campsite.name}</b><br>Campsite for ${trails.find(t=>t.id===parentTrailId)?.name || 'trail'}`, true);
+            tb.add(campsiteObject);
+            if (!campsiteObjects3D[parentTrailId]) campsiteObjects3D[parentTrailId] = [];
+            campsiteObjects3D[parentTrailId].push(campsiteObject);
+        }
+
+        function removeCampsiteMarkersForTrail(trailId) {
+            if (campsiteObjects3D[trailId]) {
+                campsiteObjects3D[trailId].forEach(obj => tb.remove(obj));
+                delete campsiteObjects3D[trailId];
+            }
+        }
+
+        function populateTrailList() {
+            trailListUl.innerHTML = ''; // Clear existing list
+            trails.forEach(trail => {
+                const listItem = document.createElement('li');
+                listItem.textContent = `${trail.name} ($${trail.price})`;
+                listItem.setAttribute('data-id', trail.id);
+                listItem.onclick = () => {
+                    map.flyTo({ center: trail.coordinates, zoom: 13, pitch: 65 });
+                    displayTrailInfo(trail);
+                };
+                trailListUl.appendChild(listItem);
+            });
+        }
+
+        function displayTrailInfo(trail) {
+            currentSelectedTrail = trail;
+            document.getElementById('modal-trail-name').textContent = trail.name;
+            document.getElementById('modal-trail-price').textContent = trail.price;
+            document.getElementById('modal-trail-difficulty').textContent = trail.difficulty;
+            document.getElementById('modal-trail-length').textContent = trail.length;
+            document.getElementById('modal-trail-terrain').textContent = trail.terrain;
+            document.getElementById('modal-trail-description').textContent = trail.description;
+
+            const campsitesListEl = document.getElementById('campsites-list');
+            const campsitesSection = document.getElementById('modal-campsites-section');
+            campsitesListEl.innerHTML = '';
+            if (trail.campsites && trail.campsites.length > 0) {
+                campsitesSection.style.display = 'block';
+                trail.campsites.forEach(campsite => {
+                    const campLi = document.createElement('li');
+                    campLi.textContent = `${campsite.name} (Location: ${campsite.coordinates.join(', ')})`;
+                    // Could add a button to "Book Campsite" here later
+                    campsitesListEl.appendChild(campLi);
+                });
+            } else {
+                campsitesSection.style.display = 'none';
+            }
+            openModal('trail-info-modal');
+        }
+
+        // --- Directions Functionality ---
+        getCurrentLocationButton.onclick = () => {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    userStartCoordinates = [position.coords.longitude, position.coords.latitude];
+                    // Update geocoder input or show a message
+                    startAddressGeocoder.setInput(`My Location (${userStartCoordinates[1].toFixed(4)}, ${userStartCoordinates[0].toFixed(4)})`);
+                    if (currentSelectedTrail) getDirections(userStartCoordinates, currentSelectedTrail.coordinates);
+                    else alert("Select a trail first to get directions to it.");
+                }, () => alert('Unable to retrieve your location. Please enter manually or check permissions.'));
+            } else {
+                alert('Geolocation is not supported by your browser.');
+            }
+        };
+
+        getRouteButton.onclick = () => {
+            if (!userStartCoordinates) {
+                alert("Please set a starting location first (either type an address or use 'My Location').");
+                return;
+            }
+            if (!currentSelectedTrail) {
+                alert("Please select a trail from the list or map to get directions to it.");
+                return;
+            }
+            getDirections(userStartCoordinates, currentSelectedTrail.coordinates);
+        };
+
+        async function getDirections(startCoords, endCoords) {
+            const query = await fetch(
+                `https://api.mapbox.com/directions/v5/mapbox/driving/${startCoords[0]},${startCoords[1]};${endCoords[0]},${endCoords[1]}?steps=true&geometries=geojson&access_token=${mapboxgl.accessToken}`,
+                { method: 'GET' }
+            );
+            const json = await query.json();
+            const routeData = json.routes[0];
+            const route = routeData.geometry.coordinates;
+            const geojson = { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: route } };
+
+            clearRoute(); // Clear previous route first
+            map.addLayer({
+                id: 'route', type: 'line', source: { type: 'geojson', data: geojson },
+                layout: { 'line-join': 'round', 'line-cap': 'round' },
+                paint: { 'line-color': '#3887be', 'line-width': 7, 'line-opacity': 0.75 }
+            });
+            // Fly to bounds of the route
+            const bounds = new mapboxgl.LngLatBounds(startCoords, startCoords);
+            for (const coord of route) {
+                bounds.extend(coord);
+            }
+            map.fitBounds(bounds, { padding: 100 });
+        }
+
+        clearRouteButton.onclick = clearRoute;
+        function clearRoute() {
+            if (map.getLayer('route')) map.removeLayer('route');
+            if (map.getSource('route')) map.removeSource('route');
+        }
+
+        // --- "List Your Trail" Functionality (Simulated) ---
+        showListTrailFormButton.onclick = () => {
+            // Reset form for safety
+            document.getElementById('new-trail-name').value = '';
+            document.getElementById('new-trail-lat').value = '';
+            document.getElementById('new-trail-lng').value = '';
+            document.getElementById('new-trail-price').value = '20';
+            document.getElementById('new-trail-difficulty').value = 'Moderate';
+            document.getElementById('new-trail-length').value = '~ miles';
+            document.getElementById('new-trail-terrain').value = 'Mixed';
+            document.getElementById('new-trail-description').value = 'Describe your awesome trail!';
+            newCampsitesContainer.innerHTML = ''; // Clear any previous campsite fields
+            addCampsiteFields(); // Add one initial campsite field block
+            openModal('list-trail-modal');
+        };
+
+        let campsiteFieldCounter = 0;
+        addCampsiteFieldButton.onclick = addCampsiteFields;
+
+        function addCampsiteFields() {
+            campsiteFieldCounter++;
+            const campsiteDiv = document.createElement('div');
+            campsiteDiv.innerHTML = `
+                <p style="font-size:0.9em; margin-bottom:5px; margin-top:10px; border-top:1px dashed #ddd; padding-top:10px;">Campsite ${campsiteFieldCounter}:</p>
+                <label for="camp-name-${campsiteFieldCounter}">Campsite Name:</label>
+                <input type="text" id="camp-name-${campsiteFieldCounter}" placeholder="e.g., Riverside Spot">
+                <label for="camp-lat-${campsiteFieldCounter}">Campsite Lat:</label>
+                <input type="number" step="any" id="camp-lat-${campsiteFieldCounter}" placeholder="e.g., 35.690">
+                <label for="camp-lng-${campsiteFieldCounter}">Campsite Lng:</label>
+                <input type="number" step="any" id="camp-lng-${campsiteFieldCounter}" placeholder="e.g., -82.980">
+            `;
+            newCampsitesContainer.appendChild(campsiteDiv);
+        }
+
+
+        submitNewTrailButton.onclick = () => {
+            const name = document.getElementById('new-trail-name').value;
+            const lat = parseFloat(document.getElementById('new-trail-lat').value);
+            const lng = parseFloat(document.getElementById('new-trail-lng').value);
+            const price = parseInt(document.getElementById('new-trail-price').value) || 0;
+            const difficulty = document.getElementById('new-trail-difficulty').value;
+            const length = document.getElementById('new-trail-length').value;
+            const terrain = document.getElementById('new-trail-terrain').value;
+            const description = document.getElementById('new-trail-description').value;
+
+            if (!name || isNaN(lat) || isNaN(lng)) {
+                alert('Please fill in Trail Name, Latitude, and Longitude.');
+                return;
+            }
+
+            const newTrailId = 'user-trail-' + Date.now();
+            const newTrail = {
+                id: newTrailId, name, coordinates: [lng, lat], altitude: 0, price,
+                difficulty, length, terrain, description, campsites: []
+            };
+
+            // Collect campsite data
+            for (let i = 1; i <= campsiteFieldCounter; i++) {
+                const campName = document.getElementById(`camp-name-${i}`)?.value;
+                const campLat = parseFloat(document.getElementById(`camp-lat-${i}`)?.value);
+                const campLng = parseFloat(document.getElementById(`camp-lng-${i}`)?.value);
+
+                if (campName && !isNaN(campLat) && !isNaN(campLng)) {
+                    newTrail.campsites.push({
+                        id: `${newTrailId}-camp${i}`,
+                        name: campName,
+                        coordinates: [campLng, campLat],
+                        altitude: 0
+                    });
+                }
+            }
+            campsiteFieldCounter = 0; // Reset for next time
+
+            trails.push(newTrail);
+            populateTrailList();    // Update UI list
+            addTrailToMap(newTrail); // Add to 3D map
+            
+            closeModal('list-trail-modal');
+            alert(`Trail "${name}" added to the map and list for this session!`);
+            map.flyTo({ center: newTrail.coordinates, zoom: 13 });
+        };
+        
+        // --- Booking Simulation ---
+        bookTrailButton.onclick = () => {
+            closeModal('trail-info-modal');
+            if (currentSelectedTrail) {
+                document.getElementById('confirmation-message').textContent = 
+                    `Booking for "${currentSelectedTrail.name}" at $${currentSelectedTrail.price}/day confirmed (simulation)!`;
+                openModal('confirmation-modal');
+            }
+        };
+
+        // --- Initial Setup ---
+        populateTrailList(); // Populate with initial trails
+        map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+        map.addControl(new mapboxgl.FullscreenControl(), 'top-right');
+
+    </script>
+</body>
+</html>
